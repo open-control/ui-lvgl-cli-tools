@@ -1,0 +1,31 @@
+#!/bin/bash
+# Open Control - LVGL Icon Font Builder
+# Usage: oc-icons   - run from any directory within a PlatformIO project
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/../lib"
+
+# Source common utilities if available
+if [[ -f "$LIB_DIR/common.sh" ]]; then
+    source "$LIB_DIR/common.sh"
+else
+    # Minimal fallback
+    RED='\033[0;31m'
+    NC='\033[0m'
+    error() { echo -e "${RED}✗${NC} $1" >&2; exit 1; }
+    find_project_root() {
+        local dir="${1:-$(pwd)}"
+        while [[ "$dir" != "/" && ! -f "$dir/platformio.ini" ]]; do
+            dir="$(dirname "$dir")"
+        done
+        [[ -f "$dir/platformio.ini" ]] && echo "$dir" || return 1
+    }
+fi
+
+# Find project root
+PROJECT_ROOT=$(find_project_root) || error "platformio.ini not found (run from project directory)"
+
+# Run Python script
+python3 "$SCRIPT_DIR/../icon/build.py" "$@"
