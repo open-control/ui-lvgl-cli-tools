@@ -324,7 +324,7 @@ def generate_header(glyphs: list[tuple[str, int]], path: Path, font_sizes: dict[
 
 # === LVGL Font Generation ===
 
-def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, int]], font_sizes: dict[str, int], bpp: int, font_name: str) -> bool:
+def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, int]], font_sizes: dict[str, int], bpp: int, font_name: str, platform_include: str = '<Arduino.h>') -> bool:
     """Generate LVGL binary fonts using npx lv_font_conv."""
     npx = shutil.which('npx')
     if not npx:
@@ -373,7 +373,7 @@ def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, i
         hex_lines = [hex_data[i:i+16*6-2] for i in range(0, len(hex_data), 16*6)]
 
         cpp_content = f'''// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
-#include <Arduino.h>
+#include {platform_include}
 
 const uint8_t {arr_name}[] PROGMEM = {{
     {(','+chr(10)+'    ').join(hex_lines)}
@@ -385,7 +385,7 @@ const uint32_t {arr_name}_len = {bin_size};
         hpp_file = data_dir / f"{out_name}.hpp"
         hpp_content = f'''// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
 #pragma once
-#include <Arduino.h>
+#include {platform_include}
 extern const uint8_t {arr_name}[] PROGMEM;
 extern const uint32_t {arr_name}_len;
 '''
@@ -426,6 +426,7 @@ def main():
     font_sizes = parse_font_sizes(config.get('FONT_SIZES', 'S:12,M:14,L:16'))
     bpp = int(config.get('LVGL_BPP', '4'))
     padding_percent = float(config.get('PADDING_PERCENT', '0.10'))
+    platform_include = config.get('PLATFORM_INCLUDE', '<Arduino.h>')
 
     if not src_dir.exists():
         error(f"Source not found: {src_dir}")
@@ -530,7 +531,7 @@ def main():
 
         # Generate LVGL fonts
         log(f"Generating LVGL fonts ({', '.join(map(str, font_sizes.values()))}px)")
-        generate_lvgl_fonts(ttf_path, header_dir, glyphs, font_sizes, bpp, font_name)
+        generate_lvgl_fonts(ttf_path, header_dir, glyphs, font_sizes, bpp, font_name, platform_include)
 
     # Cleanup temp
     for f in temp_dir.iterdir():
