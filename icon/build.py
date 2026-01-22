@@ -8,10 +8,10 @@ import sys
 import os
 
 # Force UTF-8 output on Windows
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[union-attr]
-    sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[union-attr]
-    os.environ['PYTHONIOENCODING'] = 'utf-8'
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    os.environ["PYTHONIOENCODING"] = "utf-8"
 
 import subprocess
 import hashlib
@@ -26,27 +26,53 @@ from xml.etree import ElementTree as ET
 
 # === Colors & Logging ===
 
-class C:
-    RED = '\033[0;31m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    BLUE = '\033[0;34m'
-    CYAN = '\033[0;36m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    NC = '\033[0m'
 
-def log(msg: str) -> None:      print(f"{C.CYAN}●{C.NC} {msg}")
-def success(msg: str) -> None:  print(f"  {C.GREEN}✓{C.NC} {msg}")
-def warn(msg: str) -> None:     print(f"  {C.YELLOW}⚠{C.NC} {msg}")
-def error(msg: str) -> None:    print(f"{C.RED}✗{C.NC} {msg}", file=sys.stderr); sys.exit(1)
-def added(msg: str) -> None:    print(f"  {C.GREEN}+{C.NC} {C.DIM}{msg}{C.NC}")
-def modified(msg: str) -> None: print(f"  {C.YELLOW}~{C.NC} {C.DIM}{msg}{C.NC}")
-def removed(msg: str) -> None:  print(f"  {C.RED}-{C.NC} {C.DIM}{msg}{C.NC}")
-def skip(msg: str) -> None:     print(f"  {C.DIM}  {msg}{C.NC}")
+class C:
+    RED = "\033[0;31m"
+    GREEN = "\033[0;32m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[0;34m"
+    CYAN = "\033[0;36m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    NC = "\033[0m"
+
+
+def log(msg: str) -> None:
+    print(f"{C.CYAN}●{C.NC} {msg}")
+
+
+def success(msg: str) -> None:
+    print(f"  {C.GREEN}✓{C.NC} {msg}")
+
+
+def warn(msg: str) -> None:
+    print(f"  {C.YELLOW}⚠{C.NC} {msg}")
+
+
+def error(msg: str) -> None:
+    print(f"{C.RED}✗{C.NC} {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def added(msg: str) -> None:
+    print(f"  {C.GREEN}+{C.NC} {C.DIM}{msg}{C.NC}")
+
+
+def modified(msg: str) -> None:
+    print(f"  {C.YELLOW}~{C.NC} {C.DIM}{msg}{C.NC}")
+
+
+def removed(msg: str) -> None:
+    print(f"  {C.RED}-{C.NC} {C.DIM}{msg}{C.NC}")
+
+
+def skip(msg: str) -> None:
+    print(f"  {C.DIM}  {msg}{C.NC}")
 
 
 # === Project Root & Config ===
+
 
 def find_project_root() -> Path:
     """Find project root by looking for platformio.ini in parent directories."""
@@ -67,20 +93,41 @@ def load_config(config_path: Path) -> dict[str, str]:
     with open(config_path) as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
-            if '=' in line:
-                key, _, value = line.partition('=')
+            if "=" in line:
+                key, _, value = line.partition("=")
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
                 config[key] = value
     return config
 
 
+def select_tool(config: dict[str, str], key: str, default: str) -> str:
+    """Select a tool path using platform-specific overrides.
+
+    Supported keys:
+    - <KEY>_LINUX
+    - <KEY>_MACOS
+    - <KEY>_WINDOWS
+    - <KEY>
+    """
+    if sys.platform == "win32":
+        plat = "WINDOWS"
+    elif sys.platform == "darwin":
+        plat = "MACOS"
+    else:
+        plat = "LINUX"
+
+    return config.get(f"{key}_{plat}", config.get(key, default))
+
+
 # === Hash & Cache ===
+
 
 def file_hash(path: Path) -> str:
     return hashlib.md5(path.read_bytes()).hexdigest()[:12]
+
 
 def load_hashes(cache_dir: Path) -> dict[str, str]:
     hash_file = cache_dir / "hashes.json"
@@ -88,14 +135,28 @@ def load_hashes(cache_dir: Path) -> dict[str, str]:
         return json.loads(hash_file.read_text())
     return {}
 
+
 def save_hashes(cache_dir: Path, hashes: dict[str, str]) -> None:
     (cache_dir / "hashes.json").write_text(json.dumps(hashes, indent=2))
 
 
 # === SVG Cleaning ===
 
-def inkscape_run(inkscape: str, src: Path, dst: Path, actions: list[str] | None = None, fit: bool = False) -> bool:
-    cmd = [inkscape, str(src), "--export-type=svg", "--export-plain-svg", f"--export-filename={dst}"]
+
+def inkscape_run(
+    inkscape: str,
+    src: Path,
+    dst: Path,
+    actions: list[str] | None = None,
+    fit: bool = False,
+) -> bool:
+    cmd = [
+        inkscape,
+        str(src),
+        "--export-type=svg",
+        "--export-plain-svg",
+        f"--export-filename={dst}",
+    ]
     if fit:
         cmd.append("--export-area-drawing")
     if actions:
@@ -103,51 +164,66 @@ def inkscape_run(inkscape: str, src: Path, dst: Path, actions: list[str] | None 
     subprocess.run(cmd, capture_output=True)
     return dst.exists()
 
+
 def xml_cleanup(src: Path, dst: Path):
-    ET.register_namespace('', 'http://www.w3.org/2000/svg')
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
     tree = ET.parse(src)
     root = tree.getroot()
 
-    def tag_name(e: ET.Element) -> str: return e.tag.split('}')[-1] if '}' in e.tag else e.tag
+    def tag_name(e: ET.Element) -> str:
+        return e.tag.split("}")[-1] if "}" in e.tag else e.tag
+
     def remove(e: ET.Element) -> None:
         for p in root.iter():
-            if e in list(p): p.remove(e); return
+            if e in list(p):
+                p.remove(e)
+                return
 
     for elem in list(root.iter()):
         tag = tag_name(elem)
-        style, fill = elem.get('style', ''), elem.get('fill', '')
-        if ('fill:none' in style or fill == 'none') and 'stroke:' not in style:
+        style, fill = elem.get("style", ""), elem.get("fill", "")
+        if ("fill:none" in style or fill == "none") and "stroke:" not in style:
             remove(elem)
-        elif tag in ('metadata',) or any(x in elem.tag for x in ['sodipodi', 'inkscape', 'rdf']):
+        elif tag in ("metadata",) or any(
+            x in elem.tag for x in ["sodipodi", "inkscape", "rdf"]
+        ):
             remove(elem)
-        elif tag in ('defs', 'g') and not list(elem):
+        elif tag in ("defs", "g") and not list(elem):
             remove(elem)
 
     for elem in root.iter():
-        if tag_name(elem) == 'path':
-            for attr in ['style', 'fill']:
-                if attr in elem.attrib: del elem.attrib[attr]
-            elem.set('fill-rule', 'nonzero')
+        if tag_name(elem) == "path":
+            for attr in ["style", "fill"]:
+                if attr in elem.attrib:
+                    del elem.attrib[attr]
+            elem.set("fill-rule", "nonzero")
 
     for attr in list(root.attrib.keys()):
-        if any(x in attr for x in ['sodipodi', 'inkscape', 'rdf', 'dc', 'cc', 'style']):
+        if any(x in attr for x in ["sodipodi", "inkscape", "rdf", "dc", "cc", "style"]):
             del root.attrib[attr]
 
-    tree.write(dst, encoding='unicode', xml_declaration=True)
+    tree.write(dst, encoding="unicode", xml_declaration=True)
+
 
 def get_original_viewbox(svg_path: Path) -> tuple[float, float, float, float] | None:
     """Get original viewBox if present."""
     try:
         tree = ET.parse(svg_path)
         root = tree.getroot()
-        vb = root.get('viewBox', '').split()
+        vb = root.get("viewBox", "").split()
         if len(vb) == 4:
             return cast(tuple[float, float, float, float], tuple(map(float, vb)))
         return None
     except:
         return None
 
-def square_and_center(src: Path, dst: Path, original_viewbox: tuple[float, float, float, float] | None, padding_percent: float):
+
+def square_and_center(
+    src: Path,
+    dst: Path,
+    original_viewbox: tuple[float, float, float, float] | None,
+    padding_percent: float,
+):
     """Center content in square with padding if no viewBox was defined."""
     tree = ET.parse(src)
     root = tree.getroot()
@@ -155,43 +231,60 @@ def square_and_center(src: Path, dst: Path, original_viewbox: tuple[float, float
     if original_viewbox:
         _, _, ow, oh = original_viewbox
         if abs(ow - oh) < 0.01:
-            root.set('viewBox', f'{original_viewbox[0]} {original_viewbox[1]} {ow} {oh}')
-            tree.write(dst, encoding='unicode', xml_declaration=True)
+            root.set(
+                "viewBox", f"{original_viewbox[0]} {original_viewbox[1]} {ow} {oh}"
+            )
+            tree.write(dst, encoding="unicode", xml_declaration=True)
             return
 
-    vb = root.get('viewBox', '').split()
+    vb = root.get("viewBox", "").split()
     if len(vb) == 4:
         vx, vy, vw, vh = map(float, vb)
     else:
         vx, vy = 0, 0
-        vw = float(root.get('width', '100').replace('px', ''))
-        vh = float(root.get('height', '100').replace('px', ''))
+        vw = float(root.get("width", "100").replace("px", ""))
+        vh = float(root.get("height", "100").replace("px", ""))
 
     pad = vh * padding_percent
     size = max(vw, vh) + 2 * pad
     tx = (size / 2 - vw / 2) - vx
     ty = (size / 2 - vh / 2) - vy
 
-    ns = '{http://www.w3.org/2000/svg}'
-    g = ET.Element(f'{ns}g')
-    g.set('transform', f'translate({tx:.4f}, {ty:.4f})')
+    ns = "{http://www.w3.org/2000/svg}"
+    g = ET.Element(f"{ns}g")
+    g.set("transform", f"translate({tx:.4f}, {ty:.4f})")
 
     for child in list(root):
         root.remove(child)
         g.append(child)
     root.append(g)
 
-    root.set('viewBox', f'0 0 {size:.4f} {size:.4f}')
-    root.set('width', f'{size:.4f}')
-    root.set('height', f'{size:.4f}')
+    root.set("viewBox", f"0 0 {size:.4f} {size:.4f}")
+    root.set("width", f"{size:.4f}")
+    root.set("height", f"{size:.4f}")
 
-    tree.write(dst, encoding='unicode', xml_declaration=True)
+    tree.write(dst, encoding="unicode", xml_declaration=True)
 
-def clean_svg(inkscape: str, src: Path, dst: Path, temp_dir: Path, padding_percent: float) -> bool:
+
+def clean_svg(
+    inkscape: str, src: Path, dst: Path, temp_dir: Path, padding_percent: float
+) -> bool:
     t1, t2 = temp_dir / "1.svg", temp_dir / "2.svg"
     original_viewbox = get_original_viewbox(src)
 
-    if not inkscape_run(inkscape, src, t1, ["select-all", "object-to-path", "select-all", "object-stroke-to-path", "export-plain-svg", "export-do"]):
+    if not inkscape_run(
+        inkscape,
+        src,
+        t1,
+        [
+            "select-all",
+            "object-to-path",
+            "select-all",
+            "object-stroke-to-path",
+            "export-plain-svg",
+            "export-do",
+        ],
+    ):
         return False
 
     try:
@@ -208,17 +301,17 @@ def clean_svg(inkscape: str, src: Path, dst: Path, temp_dir: Path, padding_perce
 
         tree = ET.parse(t3)
         root = tree.getroot()
-        vb = root.get('viewBox', '').split()
+        vb = root.get("viewBox", "").split()
         vx, vy, vw, vh = map(float, vb) if len(vb) == 4 else (0, 0, 100, 100)
 
         pad = vh * padding_percent
         size = vh + 2 * pad
         new_x = vx - (size - vw) / 2
         new_y = vy - pad
-        root.set('viewBox', f'{new_x:.4f} {new_y:.4f} {size:.4f} {size:.4f}')
-        root.set('width', f'{size:.4f}')
-        root.set('height', f'{size:.4f}')
-        tree.write(dst, encoding='unicode', xml_declaration=True)
+        root.set("viewBox", f"{new_x:.4f} {new_y:.4f} {size:.4f} {size:.4f}")
+        root.set("width", f"{size:.4f}")
+        root.set("height", f"{size:.4f}")
+        tree.write(dst, encoding="unicode", xml_declaration=True)
         t3.unlink(missing_ok=True)
 
     for f in [t1, t2]:
@@ -228,7 +321,7 @@ def clean_svg(inkscape: str, src: Path, dst: Path, temp_dir: Path, padding_perce
 
 # === Font Generation ===
 
-FF_SCRIPT = '''
+FF_SCRIPT = """
 import fontforge, os, sys
 svg_dir, output = sys.argv[1], sys.argv[2]
 font = fontforge.font()
@@ -248,88 +341,136 @@ for i, f in enumerate(sorted(f for f in os.listdir(svg_dir) if f.endswith('.svg'
         g.width = int(w + 2 * {margin})
     print(f"GLYPH|{{cp}}|{{os.path.splitext(f)[0]}}")
 font.generate(output)
-'''
+"""
 
-def generate_font(fontforge_cmd: str, svg_dir: Path, ttf_path: Path, config: dict[str, str]) -> list[tuple[str, int]]:
+
+def generate_font(
+    fontforge_cmd: str, svg_dir: Path, ttf_path: Path, config: dict[str, str]
+) -> list[tuple[str, int]]:
     script = FF_SCRIPT.format(
-        name=config.get('FONT_NAME', 'icons'),
-        family=config.get('FONT_FAMILY', 'Icons'),
-        em=int(config.get('UNITS_PER_EM', '1000')),
-        ascent=int(config.get('ASCENT', '800')),
-        descent=int(config.get('DESCENT', '200')),
-        start=int(config.get('UNICODE_START', '0xE000'), 0),
-        margin=int(config.get('GLYPH_MARGIN', '50'))
+        name=config.get("FONT_NAME", "icons"),
+        family=config.get("FONT_FAMILY", "Icons"),
+        em=int(config.get("UNITS_PER_EM", "1000")),
+        ascent=int(config.get("ASCENT", "800")),
+        descent=int(config.get("DESCENT", "200")),
+        start=int(config.get("UNICODE_START", "0xE000"), 0),
+        margin=int(config.get("GLYPH_MARGIN", "50")),
     )
     script_path = svg_dir / "_gen.py"
     script_path.write_text(script)
-    result = subprocess.run([fontforge_cmd, "-script", str(script_path), str(svg_dir), str(ttf_path)],
-                           capture_output=True, text=True)
+    result = subprocess.run(
+        [fontforge_cmd, "-script", str(script_path), str(svg_dir), str(ttf_path)],
+        capture_output=True,
+        text=True,
+    )
     script_path.unlink()
-    return [(name, int(cp)) for line in result.stdout.split('\n')
-            if line.startswith('GLYPH|') for _, cp, name in [line.split('|')]]
+    return [
+        (name, int(cp))
+        for line in result.stdout.split("\n")
+        if line.startswith("GLYPH|")
+        for _, cp, name in [line.split("|")]
+    ]
 
 
 def parse_font_sizes(sizes_str: str) -> dict[str, int]:
     """Parse FONT_SIZES from config: 'S:12,M:14,L:16' -> {'S': 12, 'M': 14, 'L': 16}"""
     result = {}
-    for part in sizes_str.split(','):
-        if ':' in part:
-            name, size = part.strip().split(':')
+    for part in sizes_str.split(","):
+        if ":" in part:
+            name, size = part.strip().split(":")
             result[name.strip()] = int(size.strip())
     return result
 
 
-def generate_header(glyphs: list[tuple[str, int]], path: Path, font_sizes: dict[str, int], config: dict[str, str]):
-    """Generate Icon.hpp with enum and set() function."""
+def generate_header(
+    glyphs: list[tuple[str, int]],
+    path: Path,
+    font_sizes: dict[str, int],
+    config: dict[str, str],
+):
+    """Generate header with enum and set() function."""
+
     def utf8(cp: int) -> str:
-        return f'\\x{0xE0|(cp>>12):02X}\\x{0x80|((cp>>6)&0x3F):02X}\\x{0x80|(cp&0x3F):02X}'
+        return f"\\x{0xE0 | (cp >> 12):02X}\\x{0x80 | ((cp >> 6) & 0x3F):02X}\\x{0x80 | (cp & 0x3F):02X}"
 
     names = list(font_sizes.keys())
-    size_enum = ', '.join(f'{name} = {size}' for name, size in font_sizes.items())
+    size_enum = ", ".join(f"{name} = {size}" for name, size in font_sizes.items())
     default_name = names[len(names) // 2]
 
-    font_name = config.get('FONT_NAME', 'icons')
-    fonts_struct = config.get('FONTS_STRUCT', 'app_fonts')
-    header_include = config.get('HEADER_INCLUDE', 'Fonts.hpp')
+    font_name = config.get("FONT_NAME", "icons")
+    fonts_struct = config.get("FONTS_STRUCT", "app_fonts")
+    header_include = config.get("HEADER_INCLUDE", "Fonts.hpp")
+    namespace_name = config.get("NAMESPACE", "Icon")
 
     font_cases = []
     for i, (name, size) in enumerate(font_sizes.items()):
         if i < len(font_sizes) - 1:
-            font_cases.append(f'(size == Size::{name}) ? {fonts_struct}.icons_{size}')
+            font_cases.append(f"(size == Size::{name}) ? {fonts_struct}.icons_{size}")
         else:
-            font_cases.append(f'{fonts_struct}.icons_{size}')
+            font_cases.append(f"{fonts_struct}.icons_{size}")
 
     lines: list[str] = [
-        f'// Auto-generated | {len(glyphs)} icons | {datetime.now():%Y-%m-%d}',
-        '#pragma once', f'#include "{header_include}"', '',
-        '#include <lvgl.h>', '',
-        'namespace Icon {', f'enum class Size : uint8_t {{ {size_enum} }};', ''
+        f"// Auto-generated | {len(glyphs)} icons | {datetime.now():%Y-%m-%d}",
+        "#pragma once",
+        f'#include "{header_include}"',
+        "",
+        "#include <lvgl.h>",
+        "",
+        f"namespace {namespace_name} {{",
+        f"enum class Size : uint8_t {{ {size_enum} }};",
+        "",
     ]
     for name, cp in glyphs:
-        cname = re.sub(r'[^a-zA-Z0-9]+', '_', name).strip('_').upper()
+        cname = re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_").upper()
         lines.append(f'    constexpr const char* {cname} = "{utf8(cp)}";')
 
-    font_select = '\n                        : '.join(font_cases)
+    font_select = "\n                        : ".join(font_cases)
 
-    lines += ['',
-        f'inline void set(lv_obj_t* label, const char* icon, Size size = Size::{default_name}) {{',
-        f'    lv_font_t* font = {font_select};',
-        '    lv_obj_set_style_text_font(label, font, 0);',
-        '    lv_label_set_text(label, icon);',
-        '}',
-        '}  // namespace Icon'
+    lines += [
+        "",
+        f"inline void set(lv_obj_t* label, const char* icon, Size size = Size::{default_name}) {{",
+        f"    lv_font_t* font = {font_select};",
+        "    lv_obj_set_style_text_font(label, font, 0);",
+        "    lv_label_set_text(label, icon);",
+        "}",
+        f"}}  // namespace {namespace_name}",
     ]
-    path.write_text('\n'.join(lines), encoding='utf-8')
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 # === LVGL Font Generation ===
 
-def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, int]], font_sizes: dict[str, int], bpp: int, font_name: str, platform_include: str = '<Arduino.h>') -> bool:
-    """Generate LVGL binary fonts using npx lv_font_conv."""
-    npx = shutil.which('npx')
-    if not npx:
-        warn("npx not found, skipping LVGL generation")
-        warn("Install Node.js to get npx")
+
+def generate_lvgl_fonts(
+    ttf_path: Path,
+    out_dir: Path,
+    glyphs: list[tuple[str, int]],
+    font_sizes: dict[str, int],
+    bpp: int,
+    font_name: str,
+    platform_include: str = "<Arduino.h>",
+    config: dict[str, str] | None = None,
+) -> bool:
+    """Generate LVGL binary fonts using lv_font_conv (bunx preferred, npx fallback)."""
+    cfg = config or {}
+    version = cfg.get("LV_FONT_CONV_VERSION", "1.5.3")
+
+    runner: list[str] | None = None
+    lv_font_conv = shutil.which("lv_font_conv")
+    if lv_font_conv:
+        runner = [lv_font_conv]
+    else:
+        bunx = shutil.which("bunx")
+        if bunx:
+            runner = [bunx, f"lv_font_conv@{version}"]
+        else:
+            npx = shutil.which("npx")
+            if npx:
+                runner = [npx, "--yes", f"lv_font_conv@{version}"]
+
+    if not runner:
+        warn("lv_font_conv runner not found, skipping LVGL generation")
+        warn("Install Bun (bunx) or Node.js (npx)")
         return False
 
     if not glyphs:
@@ -345,18 +486,24 @@ def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, i
         arr_name = f"{font_name}_{size}_bin"
         out_name = f"{font_name}_{size}"
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.bin') as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp:
             bin_file = Path(tmp.name)
 
         cmd = [
-            npx, 'lv_font_conv',
-            '--font', str(ttf_path),
-            '--size', str(size),
-            '--format', 'bin',
-            '--bpp', str(bpp),
-            '--range', char_range,
-            '--no-kerning',
-            '-o', str(bin_file)
+            *runner,
+            "--font",
+            str(ttf_path),
+            "--size",
+            str(size),
+            "--format",
+            "bin",
+            "--bpp",
+            str(bpp),
+            "--range",
+            char_range,
+            "--no-kerning",
+            "-o",
+            str(bin_file),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -369,33 +516,36 @@ def generate_lvgl_fonts(ttf_path: Path, out_dir: Path, glyphs: list[tuple[str, i
         bin_file.unlink()
 
         cpp_file = data_dir / f"{out_name}.c.inc"
-        hex_data = ', '.join(f'0x{b:02x}' for b in bin_data)
-        hex_lines = [hex_data[i:i+16*6-2] for i in range(0, len(hex_data), 16*6)]
+        hex_data = ", ".join(f"0x{b:02x}" for b in bin_data)
+        hex_lines = [
+            hex_data[i : i + 16 * 6 - 2] for i in range(0, len(hex_data), 16 * 6)
+        ]
 
-        cpp_content = f'''// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
+        cpp_content = f"""// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
 #include {platform_include}
 
 const uint8_t {arr_name}[] PROGMEM = {{
-    {(','+chr(10)+'    ').join(hex_lines)}
+    {("," + chr(10) + "    ").join(hex_lines)}
 }};
 const uint32_t {arr_name}_len = {bin_size};
-'''
-        cpp_file.write_text(cpp_content, encoding='utf-8')
+"""
+        cpp_file.write_text(cpp_content, encoding="utf-8")
 
         hpp_file = data_dir / f"{out_name}.hpp"
-        hpp_content = f'''// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
+        hpp_content = f"""// Auto-generated | {font_name} | {size}px | {bpp}bpp | {datetime.now():%Y-%m-%d %H:%M}
 #pragma once
 #include {platform_include}
 extern const uint8_t {arr_name}[] PROGMEM;
 extern const uint32_t {arr_name}_len;
-'''
-        hpp_file.write_text(hpp_content, encoding='utf-8')
+"""
+        hpp_file.write_text(hpp_content, encoding="utf-8")
         success(f"{out_name} ({bin_size} bytes)")
 
     return True
 
 
 # === Main ===
+
 
 def main():
     print(f"\n{C.BOLD}{C.BLUE}═══ LVGL Icon Font Builder ═══{C.NC}\n")
@@ -405,28 +555,34 @@ def main():
         project_root = find_project_root()
     except FileNotFoundError as e:
         error(str(e))
+        raise SystemExit(1)
 
     config_path = project_root / "script" / "lvgl" / "icon" / "icon_converter.conf"
     config = load_config(config_path)
 
     # Paths from config
-    src_dir = project_root / config.get('SVG_SOURCE_DIR', 'asset/icon')
-    ttf_dir = project_root / config.get('TTF_OUTPUT_DIR', 'asset/font')
-    header_dir = project_root / config.get('HEADER_OUTPUT_DIR', 'src/ui/font')
-    cache_dir = project_root / config.get('CACHE_DIR', '.cache/icons')
+    src_dir = project_root / config.get("SVG_SOURCE_DIR", "asset/icon")
+    ttf_dir = project_root / config.get("TTF_OUTPUT_DIR", "asset/font")
+    header_dir = project_root / config.get("HEADER_OUTPUT_DIR", "src/ui/font")
+    cache_dir = project_root / config.get("CACHE_DIR", ".cache/icons")
     svg_cache = cache_dir / "svg"
     temp_dir = cache_dir / "temp"
 
     # Tool paths (with defaults for Linux)
-    inkscape = config.get('INKSCAPE', 'inkscape')
-    fontforge_cmd = config.get('FONTFORGE', 'fontforge')
+    inkscape = select_tool(config, "INKSCAPE", "inkscape")
+    fontforge_cmd = select_tool(config, "FONTFORGE", "fontforge")
+
+    if not shutil.which(inkscape) and not Path(inkscape).exists():
+        error(f"Inkscape not found: {inkscape}")
+    if not shutil.which(fontforge_cmd) and not Path(fontforge_cmd).exists():
+        error(f"FontForge not found: {fontforge_cmd}")
 
     # Settings
-    font_name = config.get('FONT_NAME', 'icons')
-    font_sizes = parse_font_sizes(config.get('FONT_SIZES', 'S:12,M:14,L:16'))
-    bpp = int(config.get('LVGL_BPP', '4'))
-    padding_percent = float(config.get('PADDING_PERCENT', '0.10'))
-    platform_include = config.get('PLATFORM_INCLUDE', '<Arduino.h>')
+    font_name = config.get("FONT_NAME", "icons")
+    font_sizes = parse_font_sizes(config.get("FONT_SIZES", "S:12,M:14,L:16"))
+    bpp = int(config.get("LVGL_BPP", "4"))
+    padding_percent = float(config.get("PADDING_PERCENT", "0.10"))
+    platform_include = config.get("PLATFORM_INCLUDE", "<Arduino.h>")
 
     if not src_dir.exists():
         error(f"Source not found: {src_dir}")
@@ -452,7 +608,7 @@ def main():
     # === Step 1: Process SVGs ===
     log(f"Processing SVGs ({len(src_svgs)} files)")
 
-    stats = {'added': 0, 'modified': 0, 'unchanged': 0, 'removed': 0}
+    stats = {"added": 0, "modified": 0, "unchanged": 0, "removed": 0}
     need_rebuild = False
 
     for name, src_path in src_svgs.items():
@@ -463,14 +619,14 @@ def main():
         if name not in old_hashes:
             if clean_svg(inkscape, src_path, cached_svg, temp_dir, padding_percent):
                 added(name)
-                stats['added'] += 1
+                stats["added"] += 1
                 need_rebuild = True
             else:
                 warn(f"Failed: {name}")
         elif old_hashes[name] != h:
             if clean_svg(inkscape, src_path, cached_svg, temp_dir, padding_percent):
                 modified(name)
-                stats['modified'] += 1
+                stats["modified"] += 1
                 need_rebuild = True
             else:
                 warn(f"Failed: {name}")
@@ -478,11 +634,11 @@ def main():
             if not cached_svg.exists():
                 if clean_svg(inkscape, src_path, cached_svg, temp_dir, padding_percent):
                     modified(f"{name} (cache rebuilt)")
-                    stats['modified'] += 1
+                    stats["modified"] += 1
                     need_rebuild = True
             else:
                 skip(name)
-                stats['unchanged'] += 1
+                stats["unchanged"] += 1
 
     # Remove deleted files
     for name in old_hashes:
@@ -491,7 +647,7 @@ def main():
             if cached.exists():
                 cached.unlink()
             removed(name)
-            stats['removed'] += 1
+            stats["removed"] += 1
             need_rebuild = True
 
     # Save hashes
@@ -499,15 +655,20 @@ def main():
 
     # Summary
     parts = []
-    if stats['added']: parts.append(f"{C.GREEN}+{stats['added']}{C.NC}")
-    if stats['modified']: parts.append(f"{C.YELLOW}~{stats['modified']}{C.NC}")
-    if stats['removed']: parts.append(f"{C.RED}-{stats['removed']}{C.NC}")
-    if stats['unchanged']: parts.append(f"{C.DIM}={stats['unchanged']}{C.NC}")
+    if stats["added"]:
+        parts.append(f"{C.GREEN}+{stats['added']}{C.NC}")
+    if stats["modified"]:
+        parts.append(f"{C.YELLOW}~{stats['modified']}{C.NC}")
+    if stats["removed"]:
+        parts.append(f"{C.RED}-{stats['removed']}{C.NC}")
+    if stats["unchanged"]:
+        parts.append(f"{C.DIM}={stats['unchanged']}{C.NC}")
     success(f"SVGs: {' '.join(parts)}")
 
     # === Step 2: Generate Font ===
     ttf_path = ttf_dir / f"{font_name}.ttf"
-    header_path = header_dir / "Icon.hpp"
+    header_filename = config.get("HEADER_FILENAME", "Icon.hpp")
+    header_path = header_dir / header_filename
 
     # Check if LVGL fonts exist
     lvgl_files_exist = all(
@@ -515,7 +676,12 @@ def main():
         for s in font_sizes.values()
     )
 
-    if not need_rebuild and ttf_path.exists() and header_path.exists() and lvgl_files_exist:
+    if (
+        not need_rebuild
+        and ttf_path.exists()
+        and header_path.exists()
+        and lvgl_files_exist
+    ):
         print(f"\n{C.GREEN}✓{C.NC} {C.DIM}No changes, font up to date{C.NC}")
     else:
         # Generate TTF
@@ -531,7 +697,16 @@ def main():
 
         # Generate LVGL fonts
         log(f"Generating LVGL fonts ({', '.join(map(str, font_sizes.values()))}px)")
-        generate_lvgl_fonts(ttf_path, header_dir, glyphs, font_sizes, bpp, font_name, platform_include)
+        generate_lvgl_fonts(
+            ttf_path,
+            header_dir,
+            glyphs,
+            font_sizes,
+            bpp,
+            font_name,
+            platform_include,
+            config,
+        )
 
     # Cleanup temp
     for f in temp_dir.iterdir():
